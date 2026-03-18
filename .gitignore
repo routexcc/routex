@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+*.tsbuildinfo
+.turbo
+.env
+.env.*
+!.env.example
+.DS_Store
+.pnpm-store
+CLAUDE.md
+CODEX.md
