@@ -167,7 +167,7 @@ export class StellarAdapter implements ChainAdapter {
         code: this.usdcAssetCode,
         issuer: this.usdcAssetIssuer,
       },
-      nonce: Date.now(),
+      nonce: uniqueNonce(),
     });
 
     let signature: Uint8Array;
@@ -215,3 +215,11 @@ function stellarAmountToBigInt(amount: string): bigint {
 }
 
 export { STELLAR_FINALITY_MS, DEFAULT_USDC_ISSUER };
+
+/** Monotonic counter for unique nonce generation. */
+let nonceCounter = 0;
+
+/** Generate a unique nonce (timestamp + counter) to prevent collisions within the same millisecond. */
+function uniqueNonce(): number {
+  return Date.now() * 1000 + (nonceCounter++ % 1000);
+}
