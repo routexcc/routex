@@ -15,8 +15,8 @@ interface RouteConfig {
   maxFeeUsd?: bigint;
   maxFinalityMs?: number;
   excludeChains?: readonly ChainId[];
-  cloudApiKey?: string;      // v2 — no-op in v1
-  enableBatching?: boolean;  // v2 — no-op in v1
+  cloudApiKey?: string;      // Activates cloud fee oracle + telemetry
+  enableBatching?: boolean;  // Activates batch settlement (requires cloudApiKey)
 }
 ```
 
