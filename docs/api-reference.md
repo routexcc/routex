@@ -280,12 +280,60 @@ Create a middleware instance for handling 402 responses.
 
 ### `CloudFeeOracle(config: CloudFeeOracleConfig): FeeOracle`
 
-Cloud fee oracle (v1 stub — delegates to fallback).
+Cloud-hosted fee oracle with WebSocket streaming, REST polling fallback, and seamless degradation to a local oracle.
 
-### `TelemetryReporter(config: TelemetryReporterConfig): { report(result: RouteResult): void }`
+**Config:**
+- `apiKey` — Cloud API key (`rtx_` prefix)
+- `fallback` — `FeeOracle` to use when cloud is unreachable
+- `endpoint?` — Oracle URL (default: `https://oracle.routex.dev`)
+- `fallbackTimeoutMs?` — Milliseconds before switching to fallback (default: `5000`)
+- `wsReconnectMaxMs?` — Max reconnection delay (default: `30000`)
+- `restPollIntervalMs?` — REST polling interval when WS is down (default: `10000`)
 
-Telemetry reporter (v1 stub — no-op).
+**Behavior:**
+1. Connects via WebSocket to `/v1/fees/stream` (primary, lowest latency)
+2. Falls back to REST polling (`GET /v1/fees`) when WS reconnecting
+3. If cloud unreachable for >5s, delegates to fallback `FeeOracle`
+4. Recovers automatically when cloud becomes available
+
+```typescript
+import { CloudFeeOracle } from '@routexcc/cloud';
+import { LocalFeeOracle } from '@routexcc/core';
+
+const oracle = CloudFeeOracle({
+  apiKey: 'rtx_your_key',
+  fallback: new LocalFeeOracle(localConfig),
+});
+oracle.start();
+```
+
+### `TelemetryReporter(config: TelemetryReporterConfig): TelemetryReporterHandle`
+
+Reports route telemetry to the Routex analytics backend. Extracts only allowlisted fields from `RouteResult` — no private keys, addresses, or signer info.
+
+**Config:**
+- `apiKey` — Cloud API key
+- `endpoint?` — Telemetry endpoint URL
+- `bufferSize?` — Events to buffer before flushing (default: `10`)
+- `flushIntervalMs?` — Periodic flush interval (default: `5000`)
+
+**Handle methods:**
+- `report(result: RouteResult): void` — Queue a telemetry event (fire-and-forget)
+- `flush(): Promise<void>` — Flush buffered events immediately
+- `stop(): Promise<void>` — Stop and flush remaining events
+
+**TelemetryEvent fields** (strict allowlist):
+- `chainId`, `amount`, `feeUsd`, `savingsUsd`, `timestamp`
 
 ### `BatchClient(config: BatchClientConfig): { submit(result: RouteResult): Promise<void> }`
 
-Batch settlement client (v1 stub — no-op).
+Batch settlement client (Phase 5 stub — no-op in current release).
+
+### v2 Auto-Activation
+
+When `cloudApiKey` is set in `RouteConfig`, `createRouter()` automatically:
+- Wraps `feeOracle` with `CloudFeeOracle` (WebSocket streaming + fallback)
+- Creates `TelemetryReporter` and fires `report()` after each successful route
+- Falls back silently to local oracle if `@routexcc/cloud` is not installed
+
+Zero breaking changes from v1 — all existing code works unchanged.
