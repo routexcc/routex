@@ -143,6 +143,42 @@ describe('BalanceManager', () => {
     expect(balances.has('base')).toBe(true);
   });
 
+  it('times out hanging balance queries instead of blocking forever', async () => {
+    // Use real timers for this test since it relies on actual setTimeout
+    vi.useRealTimers();
+
+    const hangingAdapter: ChainAdapter = {
+      chainId: 'polygon' as ChainId,
+      async getBalance(): Promise<TokenBalance> {
+        // Simulate a hanging RPC — never resolves
+        return new Promise(() => {});
+      },
+      async estimateFee() { return { chainId: 'polygon' as ChainId, feeAmount: 0n, feeUsd: 0n, finalityMs: 0, confidence: 'high' as const, timestamp: 0 }; },
+      async buildPaymentPayload(p) { return { chainId: 'polygon' as ChainId, to: p.payTo, amount: p.amount, token: p.token, data: '0x' }; },
+      getFinality() { return 2000; },
+    };
+
+    const adapters = new Map<ChainId, ChainAdapter>([
+      ['base', makeAdapter('base', 5000000n)],
+      ['polygon', hangingAdapter],
+    ]);
+
+    const manager = new BalanceManager({ adapters, queryTimeoutMs: 100 });
+
+    const start = Date.now();
+    const balances = await manager.getBalances('0xUser', 'USDC');
+    const elapsed = Date.now() - start;
+
+    // Should complete within timeout (~100ms), not hang
+    expect(elapsed).toBeLessThan(2000);
+    // Base succeeded, polygon timed out
+    expect(balances.get('base')).toBe(5000000n);
+    expect(balances.has('polygon')).toBe(false);
+
+    // Restore fake timers for remaining tests
+    vi.useFakeTimers();
+  });
+
   it('evicts oldest cache entries when max size exceeded', async () => {
     const adapters = new Map<ChainId, ChainAdapter>([
       ['base', makeAdapter('base', 5000000n)],
