@@ -47,7 +47,16 @@
     "test:coverage": "vitest run --coverage",
     "clean": "rm -rf dist coverage"
   },
+  "peerDependencies": {
+    "@routexcc/cloud": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@routexcc/cloud": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@routexcc/cloud": "workspace:*",
     "tsup": "^8.4.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
