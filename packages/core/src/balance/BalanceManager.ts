@@ -10,6 +10,8 @@ export interface BalanceManagerConfig {
   readonly cacheTtlMs?: number;
   /** Maximum cache entries before oldest are evicted (default: 1000). */
   readonly maxCacheEntries?: number;
+  /** Timeout for balance queries in milliseconds (default: 10000). */
+  readonly queryTimeoutMs?: number;
 }
 
 interface CachedBalance {
@@ -25,12 +27,14 @@ export class BalanceManager {
   private readonly adapters: ReadonlyMap<ChainId, ChainAdapter>;
   private readonly cacheTtlMs: number;
   private readonly maxCacheEntries: number;
+  private readonly queryTimeoutMs: number;
   private readonly cache = new Map<string, CachedBalance>();
 
   constructor(config: BalanceManagerConfig) {
     this.adapters = config.adapters;
     this.cacheTtlMs = config.cacheTtlMs ?? 15_000;
     this.maxCacheEntries = config.maxCacheEntries ?? 1000;
+    this.queryTimeoutMs = config.queryTimeoutMs ?? 10_000;
   }
 
   /**
@@ -59,7 +63,8 @@ export class BalanceManager {
       return result;
     }
 
-    // Query remaining chains in parallel — failed chain queries don't block others
+    // Query remaining chains in parallel — failed/timed-out queries don't block others
+    const timeoutMs = this.queryTimeoutMs;
     const queries = chainsToQuery.map(async (chainId) => {
       const adapter = this.adapters.get(chainId);
       if (adapter === undefined) {
@@ -69,7 +74,17 @@ export class BalanceManager {
       return { chainId, balance: tokenBalance.balance };
     });
 
-    const settled = await Promise.allSettled(queries);
+    // Race each query against a timeout to prevent hanging on unresponsive RPCs
+    const withTimeout = queries.map((query) =>
+      Promise.race([
+        query,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('balance query timeout')), timeoutMs),
+        ),
+      ]),
+    );
+
+    const settled = await Promise.allSettled(withTimeout);
 
     for (const entry of settled) {
       if (entry.status === 'fulfilled' && entry.value.balance !== undefined) {
