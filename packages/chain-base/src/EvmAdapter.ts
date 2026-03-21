@@ -198,7 +198,7 @@ export class EvmAdapter implements ChainAdapter {
       // BigInt: amount serialized for EIP-712
       amount: payment.amount.toString(),
       token: payment.token,
-      nonce: Date.now().toString(),
+      nonce: uniqueNonce(),
     };
 
     let signature: string;
@@ -229,4 +229,12 @@ export class EvmAdapter implements ChainAdapter {
   getFinality(): number {
     return this.finalityMs;
   }
+}
+
+/** Monotonic counter for unique nonce generation. */
+let nonceCounter = 0;
+
+/** Generate a unique nonce string (timestamp + counter) to prevent collisions within the same millisecond. */
+function uniqueNonce(): string {
+  return `${Date.now()}-${nonceCounter++}`;
 }

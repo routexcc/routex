@@ -191,7 +191,7 @@ export class SolanaAdapter implements ChainAdapter {
       mint: payment.token,
       // BigInt: amount serialized for Solana instruction
       amount: payment.amount.toString(),
-      nonce: Date.now(),
+      nonce: uniqueNonce(),
     });
 
     let signature: Uint8Array;
@@ -225,3 +225,11 @@ export class SolanaAdapter implements ChainAdapter {
 }
 
 export { SOLANA_FINALITY_MS, BASE_FEE_LAMPORTS };
+
+/** Monotonic counter for unique nonce generation. */
+let nonceCounter = 0;
+
+/** Generate a unique nonce (timestamp + counter) to prevent collisions within the same millisecond. */
+function uniqueNonce(): number {
+  return Date.now() * 1000 + (nonceCounter++ % 1000);
+}
