@@ -71,6 +71,34 @@ describe('balanced strategy', () => {
     expect(result[0].score).toBe(result[1].score);
   });
 
+  it('handles zero-fee options (maxFeeNum = 0 guard)', () => {
+    const options: RouteOption[] = [
+      makeOption({ chainId: 'base', feeUsd: 0n, finalityMs: 2000 }),
+      makeOption({ chainId: 'polygon', feeUsd: 0n, finalityMs: 3000 }),
+    ];
+
+    const result = balanced(options);
+    expect(result).toHaveLength(2);
+    // Both have zero fee, so fee normalization should produce 0
+    // Faster finality should win
+    expect(result[0].chainId).toBe('base');
+    for (const r of result) {
+      expect(r.score).toBeGreaterThan(0);
+    }
+  });
+
+  it('handles zero-finality options (maxFinalityNum = 0 guard)', () => {
+    const options: RouteOption[] = [
+      makeOption({ chainId: 'base', feeUsd: 100000n, finalityMs: 0 }),
+      makeOption({ chainId: 'polygon', feeUsd: 200000n, finalityMs: 0 }),
+    ];
+
+    const result = balanced(options);
+    expect(result).toHaveLength(2);
+    // Both have zero finality, cheaper should win
+    expect(result[0].chainId).toBe('base');
+  });
+
   it('all scores are non-negative numbers', () => {
     const options: RouteOption[] = [
       // BigInt: diverse feeUsd values
