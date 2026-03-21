@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { CloudFeeOracle, TelemetryReporter, BatchClient } from '../src/index.js';
 import type {
   ChainId,
@@ -14,7 +14,6 @@ import type {
 function makeFee(chainId: ChainId): FeeEstimate {
   return {
     chainId,
-    // BigInt: token amounts must never use floating point
     feeAmount: 1000n,
     feeUsd: 500000n,
     finalityMs: 2000,
@@ -41,7 +40,6 @@ function makeRouteResult(): RouteResult {
   const payload: PaymentPayload = {
     chainId: 'base',
     to: '0xRecipient',
-    // BigInt: token amounts must never use floating point
     amount: 1000000n,
     token: 'USDC',
     data: '0xSigned',
@@ -63,19 +61,36 @@ function makeRouteResult(): RouteResult {
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
-describe('CloudFeeOracle', () => {
-  it('delegates getFee to fallback oracle', async () => {
-    const fallback = makeFallbackOracle();
-    const oracle = CloudFeeOracle({ apiKey: 'test-key', fallback });
+describe('CloudFeeOracle (no server — pure fallback)', () => {
+  let oracle: FeeOracle;
 
+  afterEach(() => {
+    if (oracle) oracle.stop();
+  });
+
+  it('delegates getFee to fallback when cloud unreachable', async () => {
+    const fallback = makeFallbackOracle();
+    oracle = CloudFeeOracle({
+      apiKey: 'test-key',
+      fallback,
+      endpoint: 'http://127.0.0.1:1', // nothing listening
+      fallbackTimeoutMs: 100,
+    });
+
+    // Without start(), cache is empty → delegates to fallback
     const fee = await oracle.getFee('base');
     expect(fee).toBeDefined();
     expect(fee!.chainId).toBe('base');
   });
 
-  it('delegates getAllFees to fallback oracle', async () => {
+  it('delegates getAllFees to fallback when cloud unreachable', async () => {
     const fallback = makeFallbackOracle();
-    const oracle = CloudFeeOracle({ apiKey: 'test-key', fallback });
+    oracle = CloudFeeOracle({
+      apiKey: 'test-key',
+      fallback,
+      endpoint: 'http://127.0.0.1:1',
+      fallbackTimeoutMs: 100,
+    });
 
     const fees = await oracle.getAllFees();
     expect(fees.size).toBe(2);
@@ -83,37 +98,42 @@ describe('CloudFeeOracle', () => {
     expect(fees.has('polygon')).toBe(true);
   });
 
-  it('delegates start/stop to fallback oracle', () => {
+  it('start/stop do not throw', () => {
     const fallback = makeFallbackOracle();
-    const oracle = CloudFeeOracle({ apiKey: 'test-key', fallback });
+    oracle = CloudFeeOracle({
+      apiKey: 'test-key',
+      fallback,
+      endpoint: 'http://127.0.0.1:1',
+    });
 
-    // Should not throw
-    oracle.start();
-    oracle.stop();
-  });
-
-  it('returns the fallback oracle instance', () => {
-    const fallback = makeFallbackOracle();
-    const oracle = CloudFeeOracle({ apiKey: 'test-key', fallback });
-
-    // In v1, cloud oracle IS the fallback
-    expect(oracle).toBe(fallback);
+    expect(() => oracle.start()).not.toThrow();
+    expect(() => oracle.stop()).not.toThrow();
   });
 });
 
-describe('TelemetryReporter', () => {
-  it('creates a reporter with a report method', () => {
-    const reporter = TelemetryReporter({ apiKey: 'test-key' });
+describe('TelemetryReporter (via index re-export)', () => {
+  it('creates a reporter with report and flush methods', () => {
+    const reporter = TelemetryReporter({
+      apiKey: 'test-key',
+      endpoint: 'http://127.0.0.1:1',
+    });
     expect(reporter).toBeDefined();
     expect(typeof reporter.report).toBe('function');
+    expect(typeof reporter.flush).toBe('function');
+    expect(typeof reporter.stop).toBe('function');
+    void reporter.stop();
   });
 
-  it('report is a no-op that does not throw', () => {
-    const reporter = TelemetryReporter({ apiKey: 'test-key' });
+  it('report does not throw even with unreachable endpoint', async () => {
+    const reporter = TelemetryReporter({
+      apiKey: 'test-key',
+      endpoint: 'http://127.0.0.1:1',
+      bufferSize: 1,
+    });
     const result = makeRouteResult();
 
-    // Should not throw
     expect(() => reporter.report(result)).not.toThrow();
+    await reporter.stop();
   });
 });
 
@@ -128,7 +148,6 @@ describe('BatchClient', () => {
     const client = BatchClient({ apiKey: 'test-key' });
     const result = makeRouteResult();
 
-    // Should resolve without throwing
     await expect(client.submit(result)).resolves.toBeUndefined();
   });
 });
