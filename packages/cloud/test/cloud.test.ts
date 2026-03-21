@@ -138,16 +138,22 @@ describe('TelemetryReporter (via index re-export)', () => {
 });
 
 describe('BatchClient', () => {
-  it('creates a client with a submit method', () => {
+  it('creates a client with submit and submitIntent methods', () => {
     const client = BatchClient({ apiKey: 'test-key' });
     expect(client).toBeDefined();
     expect(typeof client.submit).toBe('function');
+    expect(typeof client.submitIntent).toBe('function');
   });
 
-  it('submit is a no-op that resolves', async () => {
-    const client = BatchClient({ apiKey: 'test-key' });
-    const result = makeRouteResult();
+  it('submit returns error for unsupported chains (does not throw)', async () => {
+    const client = BatchClient({ apiKey: 'test-key', endpoint: 'http://127.0.0.1:1' });
+    const result = makeRouteResult(); // chainId: 'base'
 
-    await expect(client.submit(result)).resolves.toBeUndefined();
+    // Solana is not supported for batching
+    const solanaResult = { ...result, chainId: 'solana' as const };
+    const submitResult = await client.submit(solanaResult, {
+      from: '0xAgent', nonce: '0', deadline: '999999999', v: 27, r: '0x00', s: '0x00',
+    });
+    expect(submitResult.status).toBe('error');
   });
 });
