@@ -175,6 +175,19 @@ export class LocalFeeOracle implements FeeOracle {
       confidence,
       timestamp: Date.now(),
     });
+
+    // Evict entries older than 2x maxFeeAgeMs to prevent unbounded growth
+    this.evictStale();
+  }
+
+  /** Remove cache entries older than 2x maxFeeAgeMs. */
+  private evictStale(): void {
+    const cutoff = Date.now() - this.maxFeeAgeMs * 2;
+    for (const [chainId, estimate] of this.cache) {
+      if (estimate.timestamp < cutoff) {
+        this.cache.delete(chainId);
+      }
+    }
   }
 
   /**

@@ -128,6 +128,44 @@ describe('BalanceManager', () => {
     expect(spy).toHaveBeenCalledTimes(2);
   });
 
+  it('handles adapter missing from map gracefully', async () => {
+    // Create an adapters map, then query chains that include one without an adapter
+    const adapters = new Map<ChainId, ChainAdapter>([
+      ['base', makeAdapter('base', 5000000n)],
+    ]);
+    // Manually add a chainId key with undefined adapter to simulate the gap
+    (adapters as Map<ChainId, ChainAdapter>).set('polygon', undefined as unknown as ChainAdapter);
+
+    const manager = new BalanceManager({ adapters });
+    const balances = await manager.getBalances('0xUser', 'USDC');
+
+    // base should succeed, polygon should be skipped (adapter undefined)
+    expect(balances.has('base')).toBe(true);
+  });
+
+  it('evicts oldest cache entries when max size exceeded', async () => {
+    const adapters = new Map<ChainId, ChainAdapter>([
+      ['base', makeAdapter('base', 5000000n)],
+    ]);
+
+    // maxCacheEntries = 2 to force eviction
+    const manager = new BalanceManager({ adapters, maxCacheEntries: 2 });
+
+    // Fill cache with 3 different address queries
+    await manager.getBalances('0xAddr1', 'USDC');
+    await manager.getBalances('0xAddr2', 'USDC');
+    await manager.getBalances('0xAddr3', 'USDC');
+
+    // Cache should have at most 2 entries (oldest evicted)
+    // Verify by clearing and re-querying — if cache was evicted, adapter is called again
+    const adapter = adapters.get('base')!;
+    const spy = vi.spyOn(adapter, 'getBalance');
+
+    // Addr1 should have been evicted (oldest), so re-query hits adapter
+    await manager.getBalances('0xAddr1', 'USDC');
+    expect(spy).toHaveBeenCalled();
+  });
+
   it('all balances are bigint', async () => {
     const adapters = new Map<ChainId, ChainAdapter>([
       // BigInt: large balance value

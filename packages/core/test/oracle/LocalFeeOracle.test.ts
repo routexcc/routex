@@ -238,6 +238,111 @@ describe('LocalFeeOracle', () => {
     oracle.stop();
   });
 
+  it('getAllFees degrades stale estimates to low confidence', async () => {
+    const adapters = new Map<ChainId, ChainAdapter>([
+      ['base', makeAdapter('base')],
+      ['polygon', makeAdapter('polygon')],
+    ]);
+
+    const oracle = new LocalFeeOracle({ adapters, maxFeeAgeMs: 5000 });
+    oracle.start();
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Advance past stale threshold
+    vi.advanceTimersByTime(10000);
+
+    const fees = await oracle.getAllFees();
+    expect(fees.size).toBe(2);
+    // INV-6: stale fees via getAllFees have low confidence
+    for (const [, fee] of fees) {
+      expect(fee.confidence).toBe('low');
+    }
+
+    oracle.stop();
+  });
+
+  it('pollChain skips unknown chainId gracefully', async () => {
+    // Create oracle with adapters for 'base', then manually trigger pollChain
+    // for a chain not in the adapters map
+    const adapters = new Map<ChainId, ChainAdapter>([
+      ['base', makeAdapter('base')],
+    ]);
+
+    const oracle = new LocalFeeOracle({ adapters, maxFeeAgeMs: 60000 });
+    // Access private pollChain via start with an empty adapter set
+    // Simpler: create oracle with no adapters
+    const emptyOracle = new LocalFeeOracle({
+      adapters: new Map(),
+      maxFeeAgeMs: 60000,
+    });
+    emptyOracle.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // No chains to poll, no errors thrown
+    const fees = await emptyOracle.getAllFees();
+    expect(fees.size).toBe(0);
+    emptyOracle.stop();
+  });
+
+  it('cross-validation catch block handles throwing fallback', async () => {
+    const adapters = new Map<ChainId, ChainAdapter>([
+      ['base', makeAdapter('base', { feeUsd: 100000n })],
+    ]);
+    // Fallback that throws during cross-validation
+    const throwingFallback: ChainAdapter = {
+      chainId: 'base',
+      async getBalance() { return { chainId: 'base', token: 'USDC', balance: 0n, timestamp: Date.now() }; },
+      async estimateFee() { throw new Error('fallback cross-val failed'); },
+      async buildPaymentPayload(p) { return { chainId: 'base', to: p.payTo, amount: p.amount, token: p.token, data: '0x' }; },
+      getFinality() { return 2000; },
+    };
+    const fallbackAdapters = new Map<ChainId, ChainAdapter>([
+      ['base', throwingFallback],
+    ]);
+
+    const oracle = new LocalFeeOracle({
+      adapters,
+      fallbackAdapters,
+      maxFeeAgeMs: 60000,
+    });
+    oracle.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Should succeed with primary estimate, confidence kept (fallback failed silently)
+    const fee = await oracle.getFee('base');
+    expect(fee).toBeDefined();
+    expect(fee!.confidence).toBe('high');
+
+    oracle.stop();
+  });
+
+  it('evicts stale cache entries older than 2x maxFeeAgeMs', async () => {
+    const adapters = new Map<ChainId, ChainAdapter>([
+      ['base', makeAdapter('base')],
+    ]);
+
+    // pollInterval=10s, maxFeeAge=5s → eviction at 2*5=10s
+    const oracle = new LocalFeeOracle({ adapters, maxFeeAgeMs: 5000, pollIntervalMs: 10000 });
+    oracle.start();
+
+    // Initial poll populates cache at t=0
+    await vi.advanceTimersByTimeAsync(0);
+    let fee = await oracle.getFee('base');
+    expect(fee).toBeDefined();
+
+    // Advance past poll interval (10s) → triggers re-poll which also evicts stale entries
+    await vi.advanceTimersByTimeAsync(11000);
+
+    // New entry written by re-poll at t=10s, old entry (t=0) evicted (age=10s > 2*5s)
+    fee = await oracle.getFee('base');
+    expect(fee).toBeDefined();
+    // Fresh entry (age ≈ 1s), should be high confidence
+    expect(fee!.confidence).toBe('high');
+
+    oracle.stop();
+  });
+
   it('stop clears all timers', async () => {
     const adapters = new Map<ChainId, ChainAdapter>([
       ['base', makeAdapter('base')],

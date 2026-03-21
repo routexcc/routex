@@ -8,6 +8,8 @@ export interface BalanceManagerConfig {
   readonly adapters: ReadonlyMap<ChainId, ChainAdapter>;
   /** Cache TTL in milliseconds (default: 15000). */
   readonly cacheTtlMs?: number;
+  /** Maximum cache entries before oldest are evicted (default: 1000). */
+  readonly maxCacheEntries?: number;
 }
 
 interface CachedBalance {
@@ -22,11 +24,13 @@ interface CachedBalance {
 export class BalanceManager {
   private readonly adapters: ReadonlyMap<ChainId, ChainAdapter>;
   private readonly cacheTtlMs: number;
+  private readonly maxCacheEntries: number;
   private readonly cache = new Map<string, CachedBalance>();
 
   constructor(config: BalanceManagerConfig) {
     this.adapters = config.adapters;
     this.cacheTtlMs = config.cacheTtlMs ?? 15_000;
+    this.maxCacheEntries = config.maxCacheEntries ?? 1000;
   }
 
   /**
@@ -79,7 +83,25 @@ export class BalanceManager {
       // Rejected promises are silently skipped — graceful degradation
     }
 
+    // Evict oldest entries if cache exceeds max size
+    this.evictIfNeeded();
+
     return result;
+  }
+
+  /** Evict oldest cache entries when max size is exceeded. */
+  private evictIfNeeded(): void {
+    if (this.cache.size <= this.maxCacheEntries) {
+      return;
+    }
+    // Map iteration order is insertion order — delete oldest entries first
+    const toDelete = this.cache.size - this.maxCacheEntries;
+    let deleted = 0;
+    for (const key of this.cache.keys()) {
+      if (deleted >= toDelete) break;
+      this.cache.delete(key);
+      deleted++;
+    }
   }
 
   /**
