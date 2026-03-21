@@ -275,6 +275,45 @@ describe('RouteSelector', () => {
     expect(result[0].chainId).toBe('base');
   });
 
+  it('rejects chains with undefined balance', async () => {
+    const config = makeConfig();
+    const selector = new RouteSelector(config);
+
+    const fees = new Map<ChainId, FeeEstimate>([
+      ['base', makeFee('base')],
+      ['polygon', makeFee('polygon')],
+    ]);
+
+    // Only polygon has a balance, base is missing
+    const balances = new Map<ChainId, bigint>([
+      ['polygon', 10000000n],
+    ]);
+
+    const result = await selector.select(makeRequirement(), balances, fees);
+    expect(result).toHaveLength(1);
+    expect(result[0].chainId).toBe('polygon');
+  });
+
+  it('uses balanced strategy', async () => {
+    const config = makeConfig({ strategy: 'balanced' });
+    const selector = new RouteSelector(config);
+
+    const fees = new Map<ChainId, FeeEstimate>([
+      ['base', makeFee('base', { feeUsd: 200000n, finalityMs: 2000 })],
+      ['polygon', makeFee('polygon', { feeUsd: 100000n, finalityMs: 5000 })],
+    ]);
+
+    const balances = new Map<ChainId, bigint>([
+      ['base', 10000000n],
+      ['polygon', 10000000n],
+    ]);
+
+    const result = await selector.select(makeRequirement(), balances, fees);
+    expect(result.length).toBeGreaterThan(0);
+    // Both should be scored and returned
+    expect(result).toHaveLength(2);
+  });
+
   it('uses bigint for all balance and fee comparisons', async () => {
     const config = makeConfig();
     const selector = new RouteSelector(config);

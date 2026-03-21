@@ -125,6 +125,36 @@ describe('createRouter', () => {
     expect(result.chainId).toBe('polygon');
   });
 
+  it('uses balanced strategy when configured', async () => {
+    const adapters = new Map<ChainId, ChainAdapter>([
+      ['base', makeAdapter('base')],
+      ['polygon', makeAdapter('polygon')],
+    ]);
+
+    const fees = new Map<ChainId, FeeEstimate>([
+      ['base', makeFee('base', 200000n)],
+      ['polygon', { ...makeFee('polygon', 100000n), finalityMs: 5000 }],
+    ]);
+
+    const router = createRouter({
+      adapters,
+      feeOracle: makeFeeOracle(fees),
+      strategy: 'balanced',
+      maxFeeAgeMs: 60000,
+    });
+
+    const req: PaymentRequirement = {
+      acceptedChains: [
+        { chainId: 'base', payTo: '0xRecipient', amount: 1000000n, token: 'USDC' },
+        { chainId: 'polygon', payTo: '0xRecipient', amount: 1000000n, token: 'USDC' },
+      ],
+    };
+
+    const result = await router.route(req, mockSigner);
+    expect(result.chainId).toBeDefined();
+    expect(result.evaluatedOptions.length).toBeGreaterThan(0);
+  });
+
   it('integration: routes a mock payment with all four adapters', async () => {
     const adapters = new Map<ChainId, ChainAdapter>([
       ['base', makeAdapter('base')],
