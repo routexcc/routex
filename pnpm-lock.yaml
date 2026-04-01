@@ -150,10 +150,11 @@ importers:
         version: 3.2.4(@types/node@20.19.37)
 
   packages/core:
-    devDependencies:
+    dependencies:
       '@routexcc/cloud':
         specifier: workspace:*
         version: link:../cloud
+    devDependencies:
       '@vitest/coverage-v8':
         specifier: ^3.0.0
         version: 3.2.4(vitest@3.2.4(@types/node@20.19.37))
