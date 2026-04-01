@@ -1,6 +1,6 @@
 {
   "name": "@routexcc/x402",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "x402 middleware wrapper for Routex",
   "license": "MIT",
   "author": "Thalaxis <opensource@thalaxis.com> (https://thalaxis.com)",

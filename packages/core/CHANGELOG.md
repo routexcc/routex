@@ -1,5 +1,11 @@
 # @routexcc/core
 
+## 1.0.4
+
+### Patch Changes
+
+- Remove sourcemaps from published packages to halve unpacked size.
+
 ## 1.0.3
 
 ### Patch Changes

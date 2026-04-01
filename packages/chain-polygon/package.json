@@ -1,6 +1,6 @@
 {
   "name": "@routexcc/chain-polygon",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Polygon chain adapter for Routex",
   "license": "MIT",
   "author": "Thalaxis <opensource@thalaxis.com> (https://thalaxis.com)",

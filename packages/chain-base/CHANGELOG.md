@@ -1,5 +1,14 @@
 # @routexcc/chain-base
 
+## 1.0.4
+
+### Patch Changes
+
+- Remove sourcemaps from published packages to halve unpacked size.
+
+- Updated dependencies []:
+  - @routexcc/core@1.0.4
+
 ## 1.0.3
 
 ### Patch Changes
