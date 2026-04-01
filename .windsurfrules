@@ -1,0 +1,73 @@
+You are working on Routex, a multi-chain settlement cost router for the x402 payment protocol. It routes AI agent micropayments across Base, Polygon, Stellar, and Solana.
+
+# Critical Rules
+
+1. NEVER access .privateKey, .secretKey, or .mnemonic. Routex is non-custodial. Use the Signer interface — call .sign() or .signTypedData() only.
+
+2. ALL token amounts must be bigint. Never use Number, parseFloat, or parseInt for monetary values. Use bigint literals (1000n) and BigInt arithmetic.
+
+3. Each route() call must be stateless. No mutable module-level state. No singletons.
+
+4. Never throw raw Error or strings. Use typed error classes from packages/core/src/errors.ts.
+
+5. Strict TypeScript: strict: true, zero any in public API, no @ts-ignore.
+
+6. Never swallow errors silently. Throw typed errors with context for graceful degradation.
+
+# Code Style
+
+- Single quotes, semicolons, 100 char width, trailing commas
+- PascalCase for types/classes, camelCase for functions/vars, UPPER_SNAKE for constants
+- async/await only, never .then() chains
+- readonly on interface fields, as const for literals
+- Single index.ts barrel export per package
+- Mark security paths with invariant IDs: // INV-2: recipient must match 402 requirement
+- Mark BigInt operations: // BigInt: token amounts must never use floating point
+
+# Error Messages
+
+Include: chain name, public address, amount, error code
+Exclude: signer objects, credentials, RPC keys, private keys
+
+# Architecture
+
+- Monorepo: pnpm workspaces, tsup (dual CJS/ESM), vitest
+- 5-step routing pipeline: parse → filter → score → select → verify
+- Strategy functions are pure: (RouteOption[]) => RouteOption[]
+- Promise.allSettled for parallel multi-chain queries
+- Factory pattern: createRouter(), createBaseAdapter(), etc.
+
+# Packages
+
+- @routexcc/core — router engine, types, strategies, oracle, balance manager
+- @routexcc/chain-base — Base L2 adapter (EVM, viem) + shared EvmAdapter
+- @routexcc/chain-polygon — Polygon adapter (extends EvmAdapter)
+- @routexcc/chain-stellar — Stellar adapter
+- @routexcc/chain-solana — Solana adapter
+- @routexcc/x402 — x402 middleware wrapper
+- @routexcc/cloud — cloud fee oracle, telemetry, batch client
+- @routexcc/test-utils — shared mocks and fixtures (private)
+
+# Security Invariants
+
+INV-1: No private key access
+INV-2: Recipient matches 402 payTo
+INV-3: Amount matches 402 requirement (BigInt)
+INV-4: Chain ID matches selected adapter
+INV-5: No silent failure (RouteExhaustedError)
+INV-6: Stale fees rejected (maxFeeAgeMs)
+INV-7: BigInt-only token arithmetic
+INV-8: No credentials in error messages
+INV-9: Stateless routing
+INV-10: Graceful degradation
+
+# Testing
+
+- vitest, >= 90% coverage per package
+- test/*.test.ts mirroring src/ structure
+- Mock RPC calls, no live network
+- Shared fixtures in packages/test-utils/
+
+# Build Commands
+
+pnpm install && pnpm build && pnpm test && pnpm lint && pnpm typecheck

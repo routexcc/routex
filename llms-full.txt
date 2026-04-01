@@ -1,0 +1,632 @@
+# Routex — Full LLM Reference
+
+> Multi-chain settlement cost router for the x402 payment protocol. Selects the cheapest or fastest blockchain for each AI agent micropayment — non-custodial, stateless, and BigInt-safe.
+
+## Overview
+
+Routex evaluates gas fees, finality times, and wallet balances across multiple blockchains in real time, then picks the optimal chain for each payment. When an AI agent receives a `402 Payment Required` response, Routex determines which chain to pay on.
+
+Real cost impact: A $0.10 USDC payment costs ~$0.001 on Base but ~$0.01 on Polygon — 10x difference. At 10,000 payments/day, that's $90/day saved by routing to the cheapest chain.
+
+### Core Principles
+
+- **Non-custodial**: Never touches private keys. Uses a Signer interface.
+- **Stateless**: Each route() call is independent. No mutable module-level state.
+- **BigInt-safe**: All token amounts use bigint. No floating-point for money.
+- **Graceful degradation**: Typed errors with context. Never silent failures.
+
+---
+
+## Packages
+
+| Package | npm | Description |
+|---------|-----|-------------|
+| `@routexcc/core` | @routexcc/core | Router engine, types, strategies, fee oracle, balance manager |
+| `@routexcc/chain-base` | @routexcc/chain-base | Base L2 adapter (EVM, viem) + shared EvmAdapter base class |
+| `@routexcc/chain-polygon` | @routexcc/chain-polygon | Polygon adapter (EVM, viem, extends EvmAdapter) |
+| `@routexcc/chain-stellar` | @routexcc/chain-stellar | Stellar adapter (@stellar/stellar-sdk) |
+| `@routexcc/chain-solana` | @routexcc/chain-solana | Solana adapter (@solana/web3.js) |
+| `@routexcc/x402` | @routexcc/x402 | x402 payment protocol middleware wrapper |
+| `@routexcc/cloud` | @routexcc/cloud | Cloud SDK: fee oracle, telemetry, batch settlement |
+
+### Dependency Graph
+
+```
+@routexcc/core (no external deps)
+  ├── @routexcc/cloud (+ ws)
+  ├── @routexcc/chain-base
+  │   └── @routexcc/chain-polygon
+  ├── @routexcc/chain-stellar
+  ├── @routexcc/chain-solana
+  └── @routexcc/x402
+```
+
+---
+
+## Installation
+
+```bash
+# Core (required)
+npm install @routexcc/core
+
+# Chain adapters (install what you need)
+npm install @routexcc/chain-base
+npm install @routexcc/chain-polygon
+npm install @routexcc/chain-stellar
+npm install @routexcc/chain-solana
+
+# x402 middleware (optional)
+npm install @routexcc/x402
+```
+
+---
+
+## Quickstart
+
+```typescript
+import { createRouter, LocalFeeOracle } from '@routexcc/core';
+import { createBaseAdapter } from '@routexcc/chain-base';
+import { createSolanaAdapter } from '@routexcc/chain-solana';
+
+// 1. Configure chain adapters
+const adapters = new Map([
+  ['base', createBaseAdapter(viemClient)],
+  ['solana', createSolanaAdapter(solanaConnection)],
+]);
+
+// 2. Create fee oracle
+const feeOracle = new LocalFeeOracle({
+  adapters,
+  pollIntervalMs: 30_000,
+  maxFeeAgeMs: 60_000,
+});
+
+// 3. Create router
+const router = createRouter({
+  adapters,
+  feeOracle,
+  strategy: 'cheapest',
+  maxFeeAgeMs: 60_000,
+});
+
+// 4. Route a payment
+const result = await router.route(paymentRequirement, signer);
+console.log(result.chainId);  // 'base' or 'solana'
+console.log(result.payload);  // Signed payload for the facilitator
+```
+
+---
+
+## Complete Type Reference
+
+### ChainId
+
+```typescript
+type ChainId = 'base' | 'stellar' | 'solana' | 'polygon';
+```
+
+### RouteConfig
+
+```typescript
+interface RouteConfig {
+  readonly adapters: ReadonlyMap<ChainId, ChainAdapter>;
+  readonly feeOracle: FeeOracle;
+  readonly strategy: RoutingStrategy;
+  readonly maxFeeAgeMs: number;
+  readonly maxFeeUsd?: bigint;          // 6-decimal USD, e.g. 500_000n = $0.50
+  readonly maxFinalityMs?: number;
+  readonly excludeChains?: readonly ChainId[];
+  readonly cloudApiKey?: string;        // Activates cloud features (v2)
+  readonly enableBatching?: boolean;    // Activates batch settlement (v2)
+}
+```
+
+### PaymentRequirement
+
+```typescript
+interface PaymentRequirement {
+  readonly acceptedChains: readonly AcceptedPayment[];
+}
+```
+
+### AcceptedPayment
+
+```typescript
+interface AcceptedPayment {
+  readonly chainId: ChainId;
+  readonly payTo: string;
+  readonly amount: bigint;
+  readonly token: string;
+  readonly extra?: Readonly<Record<string, string>>;
+}
+```
+
+### RouteResult
+
+```typescript
+interface RouteResult {
+  readonly chainId: ChainId;
+  readonly payload: PaymentPayload;
+  readonly fee: FeeEstimate;
+  readonly evaluatedOptions: readonly RouteOption[];
+}
+```
+
+### PaymentPayload
+
+```typescript
+interface PaymentPayload {
+  readonly chainId: ChainId;
+  readonly to: string;
+  readonly amount: bigint;
+  readonly token: string;
+  readonly data: string;
+}
+```
+
+### FeeEstimate
+
+```typescript
+interface FeeEstimate {
+  readonly chainId: ChainId;
+  readonly feeAmount: bigint;
+  readonly feeUsd: bigint;        // 6-decimal fixed point
+  readonly finalityMs: number;
+  readonly confidence: FeeConfidence;
+  readonly timestamp: number;
+}
+```
+
+### FeeConfidence
+
+```typescript
+type FeeConfidence = 'high' | 'medium' | 'low';
+```
+
+### RouteOption
+
+```typescript
+interface RouteOption {
+  readonly chainId: ChainId;
+  readonly payment: AcceptedPayment;
+  readonly fee: FeeEstimate;
+  readonly balance: bigint;
+  readonly score: number;
+}
+```
+
+### TokenBalance
+
+```typescript
+interface TokenBalance {
+  readonly chainId: ChainId;
+  readonly token: string;
+  readonly balance: bigint;
+  readonly timestamp: number;
+}
+```
+
+### Signer
+
+```typescript
+interface Signer {
+  readonly address: string;
+  sign(data: Uint8Array): Promise<Uint8Array>;
+  signTypedData?(typedData: Record<string, unknown>): Promise<string>;
+}
+```
+
+### ChainAdapter
+
+```typescript
+interface ChainAdapter {
+  readonly chainId: ChainId;
+  getBalance(address: string, token: string): Promise<TokenBalance>;
+  estimateFee(payment: AcceptedPayment): Promise<FeeEstimate>;
+  buildPaymentPayload(payment: AcceptedPayment, signer: Signer): Promise<PaymentPayload>;
+  getFinality(): number;
+}
+```
+
+### FeeOracle
+
+```typescript
+interface FeeOracle {
+  getFee(chainId: ChainId): Promise<FeeEstimate | undefined>;
+  getAllFees(): Promise<ReadonlyMap<ChainId, FeeEstimate>>;
+  start(): void;
+  stop(): void;
+}
+```
+
+### RoutingStrategy
+
+```typescript
+type RoutingStrategy = 'cheapest' | 'fastest' | 'balanced' | CustomStrategy;
+```
+
+### CustomStrategy
+
+```typescript
+interface CustomStrategy {
+  readonly type: 'custom';
+  readonly scorer: (options: readonly RouteOption[]) => readonly RouteOption[];
+}
+```
+
+### RejectionReason
+
+```typescript
+interface RejectionReason {
+  readonly chainId: ChainId;
+  readonly reason: string;
+  readonly code: RejectionCode;
+}
+```
+
+### RejectionCode
+
+```typescript
+type RejectionCode =
+  | 'NO_ADAPTER'
+  | 'INSUFFICIENT_BALANCE'
+  | 'FEE_TOO_HIGH'
+  | 'FINALITY_TOO_SLOW'
+  | 'CHAIN_EXCLUDED'
+  | 'STALE_FEE'
+  | 'FEE_UNAVAILABLE';
+```
+
+---
+
+## Core API
+
+### createRouter(config: RouteConfig): Router
+
+Factory function that creates a Router instance.
+
+```typescript
+const router = createRouter({
+  adapters: new Map([['base', baseAdapter]]),
+  feeOracle: oracle,
+  strategy: 'cheapest',
+  maxFeeAgeMs: 60_000,
+});
+```
+
+### Router.route(req: PaymentRequirement, signer: Signer): Promise<RouteResult>
+
+Select the best route and build a signed payment payload.
+
+**Throws:**
+- `RouteExhaustedError` — no eligible route found
+- `PaymentConstructionError` — payload construction or validation failed
+
+```typescript
+const result = await router.route(paymentRequirement, signer);
+// result.chainId    — selected chain
+// result.payload    — signed PaymentPayload
+// result.fee        — FeeEstimate for selected chain
+// result.evaluatedOptions — all RouteOptions with scores
+```
+
+### LocalFeeOracle
+
+Polls chain adapters for fee estimates. Caches in memory with stale detection.
+
+```typescript
+const oracle = new LocalFeeOracle({
+  adapters,
+  pollIntervalMs: 30_000,  // default: 30s
+});
+
+oracle.start();
+const fee = await oracle.getFee('base');
+const allFees = await oracle.getAllFees();
+oracle.stop();
+```
+
+### BalanceManager
+
+Parallel balance queries with caching.
+
+```typescript
+const balances = new BalanceManager({
+  adapters,
+  cacheTtlMs: 15_000,  // default: 15s
+});
+const balanceMap = await balances.getBalances(walletAddress, tokenAddress);
+// Map<ChainId, bigint>
+```
+
+### RouteSelector
+
+Five-step routing pipeline (parse, filter, score, select, verify).
+
+```typescript
+const selector = new RouteSelector(routeConfig);
+const result = await selector.select(paymentRequirement, signer);
+```
+
+---
+
+## Strategy Functions
+
+### cheapest(options: readonly RouteOption[]): readonly RouteOption[]
+
+Score by lowest fee. Formula: `1 / (feeUsd + 0.0001)`.
+Ties broken by finality time.
+
+### fastest(options: readonly RouteOption[]): readonly RouteOption[]
+
+Score by lowest finality time. Formula: `1 / (finalityMs + 1)`.
+Ties broken by fee.
+
+### balanced(options: readonly RouteOption[]): readonly RouteOption[]
+
+Weighted combination. Formula: `0.6 * normFee + 0.4 * normFinality`.
+Metrics normalized by max value in candidate set.
+
+### custom(scorer): (options: readonly RouteOption[]) => readonly RouteOption[]
+
+Wrap a user-provided scoring function.
+
+```typescript
+const router = createRouter({
+  strategy: {
+    type: 'custom',
+    scorer: (options) => options.map(o => ({ ...o, score: myScore(o) })),
+  },
+  // ...
+});
+```
+
+---
+
+## Error Classes
+
+### RoutexError
+
+Abstract base class for all Routex errors.
+
+### RouteExhaustedError
+
+No eligible route found. Contains `rejections: RejectionReason[]`.
+
+### StaleFeesError
+
+Fee estimates older than maxFeeAgeMs. Contains `chainId`, `ageMs`, `maxAgeMs`.
+
+### InsufficientBalanceError
+
+Chain has insufficient balance. Contains `chainId`, `required` (bigint), `available` (bigint).
+
+### PaymentConstructionError
+
+Payload construction failed. Contains `chainId`, `phase`, `detail` (sanitized).
+
+---
+
+## Chain Adapters
+
+### Base (`@routexcc/chain-base`)
+
+EVM adapter using viem. Finality: ~2000ms. Chain IDs: 8453 (mainnet), 84532 (testnet).
+
+```typescript
+import { createBaseAdapter } from '@routexcc/chain-base';
+import { createPublicClient, http } from 'viem';
+import { base } from 'viem/chains';
+
+const client = createPublicClient({ chain: base, transport: http(rpcUrl) });
+const adapter = createBaseAdapter(client);
+// Testnet: createBaseAdapter(client, { testnet: true })
+```
+
+Exports: `createBaseAdapter`, `EvmAdapter` (shared base class).
+
+### Polygon (`@routexcc/chain-polygon`)
+
+EVM adapter extending EvmAdapter. Finality: ~2000ms. Chain IDs: 137 (mainnet), 80002 (testnet).
+
+```typescript
+import { createPolygonAdapter } from '@routexcc/chain-polygon';
+const adapter = createPolygonAdapter(viemClient);
+```
+
+### Stellar (`@routexcc/chain-stellar`)
+
+Stellar SDK adapter. Finality: ~5000ms. Uses USDC trustlines.
+
+```typescript
+import { createStellarAdapter } from '@routexcc/chain-stellar';
+const adapter = createStellarAdapter(stellarRpcClient, {
+  usdcIssuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+});
+```
+
+### Solana (`@routexcc/chain-solana`)
+
+Solana web3.js adapter. Finality: ~400ms. Uses SPL USDC.
+
+```typescript
+import { createSolanaAdapter } from '@routexcc/chain-solana';
+const adapter = createSolanaAdapter(solanaRpcClient, {
+  usdcMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+});
+```
+
+---
+
+## x402 Middleware
+
+```typescript
+import { routexMiddleware } from '@routexcc/x402';
+
+const middleware = routexMiddleware({
+  routeConfig: { adapters, feeOracle, strategy: 'cheapest', maxFeeAgeMs: 60_000 },
+  signer: mySigner,
+  onRouteSelected: (result) => console.log(`Paying via ${result.chainId}`),
+  onRouteFailed: (error) => console.error('Routing failed:', error),
+});
+
+// When you get a 402 response:
+const parsed = middleware.parseResponse(402, responseBody);
+if (parsed) {
+  const { payload, chainId } = await middleware.handlePaymentRequired(parsed);
+}
+```
+
+---
+
+## Cloud SDK (`@routexcc/cloud`)
+
+### CloudFeeOracle
+
+WebSocket-based fee oracle with REST fallback and local oracle degradation.
+
+```typescript
+import { CloudFeeOracle } from '@routexcc/cloud';
+import { LocalFeeOracle } from '@routexcc/core';
+
+const oracle = CloudFeeOracle({
+  apiKey: 'rtx_your_key',
+  fallback: new LocalFeeOracle(localConfig),
+  // endpoint?: string (default: https://oracle.routex.dev)
+  // fallbackTimeoutMs?: number (default: 5000)
+  // wsReconnectMaxMs?: number (default: 30000)
+  // restPollIntervalMs?: number (default: 10000)
+});
+oracle.start();
+```
+
+Behavior: WebSocket → REST polling → local fallback. Auto-recovers.
+
+### TelemetryReporter
+
+Event buffering and HTTP batch reporting. Allowlisted fields only.
+
+```typescript
+import { TelemetryReporter } from '@routexcc/cloud';
+
+const reporter = TelemetryReporter({
+  apiKey: 'rtx_your_key',
+  // bufferSize?: number (default: 10)
+  // flushIntervalMs?: number (default: 5000)
+});
+reporter.report(routeResult);  // fire-and-forget
+await reporter.flush();        // flush now
+await reporter.stop();         // stop and flush
+```
+
+Telemetry fields: chainId, amount, feeUsd, savingsUsd, timestamp.
+
+### BatchClient
+
+Batch intent submission for settlement (v2 feature).
+
+### v2 Auto-Activation
+
+Set `cloudApiKey` in `RouteConfig` to automatically:
+- Wrap feeOracle with CloudFeeOracle
+- Create TelemetryReporter (fires after each route)
+- Fall back silently if @routexcc/cloud is not installed
+
+---
+
+## Supported Chains
+
+| Chain    | Adapter Package           | Finality | Typical Fee         | Technology   |
+|----------|---------------------------|----------|---------------------|-------------- |
+| Base     | @routexcc/chain-base      | ~2s      | $0.0005-$0.005      | EVM (viem)   |
+| Polygon  | @routexcc/chain-polygon   | ~2s      | $0.005-$0.05        | EVM (viem)   |
+| Stellar  | @routexcc/chain-stellar   | ~5s      | $0.00001-$0.0001    | Stellar SDK  |
+| Solana   | @routexcc/chain-solana    | ~400ms   | $0.0005-$0.005      | web3.js      |
+
+---
+
+## Security Invariants
+
+| ID     | Invariant                                              |
+|--------|--------------------------------------------------------|
+| INV-1  | No private key access (Signer interface)               |
+| INV-2  | Recipient matches 402 payTo address                    |
+| INV-3  | Amount matches 402 requirement (BigInt)                |
+| INV-4  | Chain ID matches selected adapter                      |
+| INV-5  | No silent failure (RouteExhaustedError with rejections)|
+| INV-6  | Stale fees rejected (maxFeeAgeMs)                      |
+| INV-7  | BigInt-only token arithmetic                           |
+| INV-8  | No credentials in error messages                       |
+| INV-9  | Stateless routing                                      |
+| INV-10 | Graceful degradation (caller can always fall back)     |
+
+---
+
+## Configuration Reference
+
+### RouteConfig Options
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| adapters | Map<ChainId, ChainAdapter> | Yes | Chain adapters to use |
+| feeOracle | FeeOracle | Yes | Fee estimation source |
+| strategy | RoutingStrategy | Yes | 'cheapest' / 'fastest' / 'balanced' / CustomStrategy |
+| maxFeeAgeMs | number | Yes | Reject fees older than this (ms) |
+| maxFeeUsd | bigint | No | Max fee in USD (6-decimal) |
+| maxFinalityMs | number | No | Max finality time (ms) |
+| excludeChains | ChainId[] | No | Chains to skip |
+| cloudApiKey | string | No | Activates cloud features |
+| enableBatching | boolean | No | Activates batch settlement |
+
+### LocalFeeOracle Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| adapters | Map<ChainId, ChainAdapter> | — | Chain adapters to poll |
+| pollIntervalMs | number | 30000 | Polling interval (ms) |
+
+### BalanceManager Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| adapters | Map<ChainId, ChainAdapter> | — | Chain adapters |
+| cacheTtlMs | number | 15000 | Cache TTL (ms) |
+
+---
+
+## Error Handling
+
+```typescript
+import {
+  RouteExhaustedError,
+  StaleFeesError,
+  InsufficientBalanceError,
+  PaymentConstructionError,
+} from '@routexcc/core';
+
+try {
+  const result = await router.route(requirement, signer);
+} catch (error) {
+  if (error instanceof RouteExhaustedError) {
+    console.log(error.rejections); // Per-chain rejection reasons
+  }
+  if (error instanceof InsufficientBalanceError) {
+    console.log(error.chainId, error.required, error.available);
+  }
+  if (error instanceof StaleFeesError) {
+    console.log(error.chainId, error.ageMs, error.maxAgeMs);
+  }
+}
+```
+
+---
+
+## Requirements
+
+- Node.js >= 20
+- TypeScript >= 5.7 (strict mode)
+- Dual CJS/ESM output (.cjs/.mjs)
+
+## License
+
+MIT

@@ -1,0 +1,108 @@
+# Routex
+
+> Multi-chain settlement cost router for the x402 payment protocol. Selects the cheapest or fastest blockchain for each AI agent micropayment — non-custodial, stateless, and BigInt-safe.
+
+## Overview
+
+Routex evaluates gas fees, finality times, and wallet balances across multiple blockchains in real time, then picks the optimal chain for each payment. Built for AI agents, wallets, and autonomous services integrating x402 payments.
+
+- Non-custodial: never touches private keys (Signer interface only)
+- Stateless: each route() call is independent
+- BigInt-safe: all token amounts use bigint, never floating point
+- Graceful degradation: typed errors with context, never silent failures
+
+## Packages
+
+- @routexcc/core: Router engine, strategies, fee oracle, types
+- @routexcc/chain-base: Base (L2) chain adapter (EVM, viem)
+- @routexcc/chain-polygon: Polygon chain adapter (EVM, viem)
+- @routexcc/chain-stellar: Stellar chain adapter (@stellar/stellar-sdk)
+- @routexcc/chain-solana: Solana chain adapter (@solana/web3.js)
+- @routexcc/x402: x402 payment protocol middleware wrapper
+- @routexcc/cloud: Cloud SDK — fee oracle, telemetry, batch settlement (optional)
+
+## Quickstart
+
+```typescript
+import { createRouter, LocalFeeOracle } from '@routexcc/core';
+import { createBaseAdapter } from '@routexcc/chain-base';
+
+const adapters = new Map([['base', createBaseAdapter(viemClient)]]);
+const feeOracle = new LocalFeeOracle({ adapters, pollIntervalMs: 30_000, maxFeeAgeMs: 60_000 });
+const router = createRouter({ adapters, feeOracle, strategy: 'cheapest', maxFeeAgeMs: 60_000 });
+
+const result = await router.route(paymentRequirement, signer);
+```
+
+## Core API
+
+- `createRouter(config: RouteConfig): Router` — factory function
+- `Router.route(req: PaymentRequirement, signer: Signer): Promise<RouteResult>` — evaluate and select best chain
+- `LocalFeeOracle` — polls adapters for fee estimates with caching
+- `BalanceManager` — parallel balance queries across chains
+- `routexMiddleware(config)` — x402 HTTP 402 interception
+
+## Key Types
+
+- `ChainId`: 'base' | 'stellar' | 'solana' | 'polygon'
+- `RouteConfig`: adapters, feeOracle, strategy, maxFeeAgeMs, maxFeeUsd?, maxFinalityMs?, excludeChains?
+- `PaymentRequirement`: { acceptedChains: AcceptedPayment[] }
+- `AcceptedPayment`: { chainId, payTo, amount (bigint), token }
+- `RouteResult`: { chainId, payload, fee, evaluatedOptions }
+- `FeeEstimate`: { chainId, feeAmount (bigint), feeUsd (bigint, 6-decimal), finalityMs, confidence, timestamp }
+- `Signer`: { address, sign(data), signTypedData?(typedData) }
+- `ChainAdapter`: { chainId, getBalance(), estimateFee(), buildPaymentPayload(), getFinality() }
+
+## Routing Strategies
+
+- `'cheapest'` — lowest fee in USD: score = 1 / (feeUsd + 0.0001)
+- `'fastest'` — lowest finality time: score = 1 / (finalityMs + 1)
+- `'balanced'` — weighted: 0.6 * normFee + 0.4 * normFinality
+- `custom` — user-provided scorer function
+
+## Error Classes
+
+- `RoutexError` — abstract base
+- `RouteExhaustedError` — no eligible route, includes rejections[]
+- `StaleFeesError` — fee estimates older than maxFeeAgeMs
+- `InsufficientBalanceError` — chain has insufficient balance
+- `PaymentConstructionError` — payload construction failed
+
+## Supported Chains
+
+| Chain    | Finality | Typical Fee         |
+|----------|----------|---------------------|
+| Base     | ~2s      | $0.0005-$0.005      |
+| Polygon  | ~2s      | $0.005-$0.05        |
+| Stellar  | ~5s      | $0.00001-$0.0001    |
+| Solana   | ~400ms   | $0.0005-$0.005      |
+
+## Security Invariants
+
+1. No private key access (Signer interface)
+2. Recipient matches 402 payTo address
+3. Amount matches 402 requirement (BigInt)
+4. Chain ID matches selected adapter
+5. No silent failure (RouteExhaustedError)
+6. Stale fees rejected (maxFeeAgeMs)
+7. BigInt-only token arithmetic
+8. No credentials in error messages
+9. Stateless routing
+10. Graceful degradation (caller can always fall back)
+
+## Documentation
+
+- [Getting Started](docs/getting-started.md)
+- [Configuration](docs/configuration.md)
+- [Strategies](docs/strategies.md)
+- [Chain Adapters](docs/chain-adapters.md)
+- [Security](docs/security.md)
+- [API Reference](docs/api-reference.md)
+- [Batching](docs/batching.md)
+- [v2 Upgrade](docs/v2-upgrade.md)
+
+## Requirements
+
+- Node.js >= 20
+- TypeScript >= 5.7 (strict mode)
+- Dual CJS/ESM
