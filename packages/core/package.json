@@ -1,6 +1,6 @@
 {
   "name": "@routexcc/core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Multi-chain settlement cost router engine for the x402 payment protocol",
   "license": "MIT",
   "author": "Thalaxis <opensource@thalaxis.com> (https://thalaxis.com)",
@@ -52,14 +52,6 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "clean": "rm -rf dist coverage"
-  },
-  "peerDependencies": {
-    "@routexcc/cloud": "workspace:*"
-  },
-  "peerDependenciesMeta": {
-    "@routexcc/cloud": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "tsup": "^8.4.0",

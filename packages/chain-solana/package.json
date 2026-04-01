@@ -1,6 +1,6 @@
 {
   "name": "@routexcc/chain-solana",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Solana chain adapter for Routex",
   "license": "MIT",
   "author": "Thalaxis <opensource@thalaxis.com> (https://thalaxis.com)",

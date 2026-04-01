@@ -1,6 +1,6 @@
 {
   "name": "@routexcc/chain-stellar",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Stellar chain adapter for Routex",
   "license": "MIT",
   "author": "Thalaxis <opensource@thalaxis.com> (https://thalaxis.com)",
