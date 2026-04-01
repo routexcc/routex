@@ -1,6 +1,6 @@
 {
   "name": "@routexcc/chain-base",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Base chain adapter for Routex",
   "license": "MIT",
   "author": "Thalaxis <opensource@thalaxis.com> (https://thalaxis.com)",
@@ -37,7 +37,8 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"

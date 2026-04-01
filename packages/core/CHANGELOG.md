@@ -1,5 +1,11 @@
 # @routexcc/core
 
+## 1.0.2
+
+### Patch Changes
+
+- Include README.md in published npm package files.
+
 ## 1.0.1
 
 ### Patch Changes

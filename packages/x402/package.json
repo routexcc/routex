@@ -1,6 +1,6 @@
 {
   "name": "@routexcc/x402",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "x402 middleware wrapper for Routex",
   "license": "MIT",
   "author": "Thalaxis <opensource@thalaxis.com> (https://thalaxis.com)",
@@ -36,7 +36,8 @@
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "publishConfig": {
     "access": "public"
