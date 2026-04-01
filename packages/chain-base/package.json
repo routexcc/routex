@@ -16,9 +16,13 @@
   "keywords": [
     "x402",
     "base",
-    "l2",
     "evm",
+    "l2",
+    "usdc",
     "chain-adapter",
+    "viem",
+    "eip-712",
+    "payment-routing",
     "routex"
   ],
   "type": "module",

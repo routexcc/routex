@@ -15,13 +15,19 @@
   },
   "keywords": [
     "x402",
-    "payment",
-    "routing",
+    "payment-routing",
     "multi-chain",
-    "micropayment",
-    "ai-agent",
+    "settlement",
+    "micropayments",
+    "usdc",
     "blockchain",
-    "settlement"
+    "ai-agents",
+    "fee-optimization",
+    "routing",
+    "stablecoin",
+    "bigint",
+    "non-custodial",
+    "typescript"
   ],
   "type": "module",
   "exports": {

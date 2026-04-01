@@ -16,8 +16,12 @@
   "keywords": [
     "x402",
     "middleware",
-    "payment",
     "402",
+    "payment-required",
+    "http-402",
+    "ai-agent",
+    "micropayments",
+    "payment-routing",
     "routex"
   ],
   "type": "module",

@@ -16,7 +16,10 @@
   "keywords": [
     "x402",
     "stellar",
+    "usdc",
     "chain-adapter",
+    "stellar-sdk",
+    "payment-routing",
     "routex"
   ],
   "type": "module",

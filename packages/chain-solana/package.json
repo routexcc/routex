@@ -17,7 +17,9 @@
     "x402",
     "solana",
     "spl-token",
+    "usdc",
     "chain-adapter",
+    "payment-routing",
     "routex"
   ],
   "type": "module",
