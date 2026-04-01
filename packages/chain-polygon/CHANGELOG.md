@@ -1,5 +1,15 @@
 # @routexcc/chain-polygon
 
+## 1.0.3
+
+### Patch Changes
+
+- Add proper README.md to all packages for npm display.
+
+- Updated dependencies []:
+  - @routexcc/core@1.0.3
+  - @routexcc/chain-base@1.0.3
+
 ## 1.0.2
 
 ### Patch Changes

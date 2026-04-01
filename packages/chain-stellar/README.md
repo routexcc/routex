@@ -1,28 +1,44 @@
 # @routexcc/chain-stellar
 
-Stellar chain adapter for Routex.
+Stellar chain adapter for [Routex](https://github.com/routexcc/routex) — the multi-chain settlement cost router for the x402 payment protocol.
 
 ## Install
 
 ```bash
-npm install @routexcc/chain-stellar
+npm install @routexcc/core @routexcc/chain-stellar
 ```
 
 ## Usage
 
-```ts
-import { createStellarAdapter } from "@routexcc/chain-stellar";
-import { Horizon } from "@stellar/stellar-sdk";
+```typescript
+import { createStellarAdapter } from '@routexcc/chain-stellar';
 
-const horizonClient = new Horizon.Server("https://horizon.stellar.org");
-const adapter = createStellarAdapter(horizonClient);
+const adapter = createStellarAdapter(stellarRpcClient, {
+  usdcIssuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+});
 ```
+
+## Details
+
+- **Technology**: @stellar/stellar-sdk
+- **Finality**: ~5000ms (consensus round)
+- **Token**: USDC via trustline
+- **RPC**: Horizon API (account balances, fee stats) + Stellar RPC (transaction submission)
+
+Stellar uses 7-decimal precision internally; the adapter converts to 6-decimal USDC precision.
+
+## Exports
+
+- `createStellarAdapter(rpcClient, options)` — factory function
+- `StellarAdapter` — adapter class
+
+## Non-Custodial
+
+The adapter calls `signer.sign()` to construct payment payloads. It never accesses `.privateKey`, `.secretKey`, or `.mnemonic`.
 
 ## Documentation
 
-See the [main repo README](https://github.com/routexcc/routex) for full documentation.
-
-Part of the [Routex](https://github.com/routexcc/routex) monorepo by [Thalaxis](https://thalaxis.com).
+See the [full documentation](https://github.com/routexcc/routex) for routing strategies, configuration, and security model.
 
 ## License
 

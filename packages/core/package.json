@@ -1,6 +1,6 @@
 {
   "name": "@routexcc/core",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Multi-chain settlement cost router engine for the x402 payment protocol",
   "license": "MIT",
   "author": "Thalaxis <opensource@thalaxis.com> (https://thalaxis.com)",
