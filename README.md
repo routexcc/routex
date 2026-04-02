@@ -431,6 +431,23 @@ interface RouteOption {
 
 ---
 
+## Quick Start Template
+
+Clone the starter template to build an x402 agent with Routex in minutes:
+
+```bash
+git clone https://github.com/routexcc/x402-agent-starter.git
+cd x402-agent-starter
+pnpm install
+cp .env.example .env
+pnpm server   # Terminal 1
+pnpm agent    # Terminal 2
+```
+
+See [x402-agent-starter](https://github.com/routexcc/x402-agent-starter) for the full template with environment config, non-custodial signer, and local test server.
+
+---
+
 ## Contributing
 
 ```bash
