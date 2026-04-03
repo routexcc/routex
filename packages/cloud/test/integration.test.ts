@@ -9,6 +9,7 @@ import type { ChainId, FeeConfidence } from '@routexcc/core';
  */
 
 const ORACLE_URL = process.env['ORACLE_URL'] ?? 'http://localhost:8080';
+const SKIP = !process.env['ORACLE_URL'];
 
 interface OracleFeeEstimate {
   chainId: string;
@@ -38,7 +39,7 @@ async function fetchFees(chains?: string): Promise<OracleFeesResponse> {
   return res.json() as Promise<OracleFeesResponse>;
 }
 
-describe('Oracle API → SDK contract integration', () => {
+describe.skipIf(SKIP)('Oracle API → SDK contract integration', () => {
   it('GET /healthz returns ok', async () => {
     const res = await fetch(`${ORACLE_URL}/healthz`);
     expect(res.ok).toBe(true);
