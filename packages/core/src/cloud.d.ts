@@ -4,7 +4,7 @@
  * These declarations allow core to build without cloud's .d.ts files present.
  */
 declare module '@routexcc/cloud' {
-  import type { FeeOracle, RouteResult } from '@routexcc/core';
+  import type { FeeOracle, RouteResult } from './types';
 
   export function CloudFeeOracle(config: {
     apiKey: string;
